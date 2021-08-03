@@ -19,7 +19,7 @@
     },
     "require": {
         "league/flysystem": "^1.0",
-        "guzzlehttp/guzzle": "^7.3",
+        "guzzlehttp/guzzle": "^6.0|^7.3",
         "mzur/guess-mime": "^1.0"
     },
     "require-dev": {
