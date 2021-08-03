@@ -1,6 +1,6 @@
 {
     "name": "biigle/flysystem-elements",
-    "description": "Flysystem adapter the ELEMENTS media asset management system",
+    "description": "Flysystem adapter for the ELEMENTS media asset management system (read-only).",
     "keywords": [
         "filesystem", "filesystems", "files", "biigle",
         "storage", "flysystem", "elements", "mams"
@@ -19,7 +19,8 @@
     },
     "require": {
         "league/flysystem": "^1.0",
-        "guzzlehttp/guzzle": "^7.3"
+        "guzzlehttp/guzzle": "^7.3",
+        "mzur/guess-mime": "^1.0"
     },
     "require-dev": {
         "phpunit/phpunit": "^9.5",

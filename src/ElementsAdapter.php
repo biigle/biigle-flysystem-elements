@@ -10,6 +10,7 @@ use League\Flysystem\Adapter\Polyfill\NotSupportingVisibilityTrait;
 use League\Flysystem\Adapter\Polyfill\StreamedCopyTrait;
 use League\Flysystem\Config;
 use League\Flysystem\Util;
+use Mzur\GuessMIME\GuessMIME;
 use OpenStack\Common\Error\BadResponseError;
 use OpenStack\ObjectStore\v1\Models\Container;
 use OpenStack\ObjectStore\v1\Models\StorageObject;
@@ -257,7 +258,7 @@ class ElementsAdapter extends AbstractAdapter
     protected function getMediaFileDownload($path)
     {
         $id = $this->getMediaFile($path)['id'];
-        $response = $this->client->get("api/2/media/files/{$id}/download");
+        $response = $this->client->get("api/media/download/{$id}");
 
         return $response;
     }
@@ -271,12 +272,14 @@ class ElementsAdapter extends AbstractAdapter
      */
     protected function parseFileMetadata(array $file)
     {
+        $gm = new GuessMIME;
+
         return [
             'type' => $file['is_dir'] ? 'dir' : 'file',
             'dirname' => Util::dirname($file['path']),
             'path' => $file['path'],
             'timestamp' => $file['mtime'],
-            'mimetype' => '',
+            'mimetype' => $gm->guess($file['path']),
             'size' => $file['size'],
         ];
     }

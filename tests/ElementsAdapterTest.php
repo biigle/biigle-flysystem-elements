@@ -42,20 +42,20 @@ class ElementsAdapterTest extends TestCase
     public function testGetMetadataFile()
     {
         $mock = new MockHandler([
-            new Response(200, [], '[{"is_dir":false,"mtime":123,"size": 456,"path":"my/path"}]'),
+            new Response(200, [], '[{"is_dir":false,"mtime":123,"size": 456,"path":"my/path.jpg"}]'),
         ]);
         $handlerStack = HandlerStack::create($mock);
         $client = new Client(['handler' => $handlerStack]);
         $adapter = new ElementsAdapter($client);
 
-        $data = $adapter->getMetadata('my/path');
+        $data = $adapter->getMetadata('my/path.jpg');
 
         $expect = [
             'type' => 'file',
             'dirname' => 'my',
-            'path' => 'my/path',
+            'path' => 'my/path.jpg',
             'timestamp' => 123,
-            'mimetype' => '',
+            'mimetype' => 'image/jpeg',
             'size' => 456,
         ];
         $this->assertEquals($expect, $data);
@@ -77,7 +77,7 @@ class ElementsAdapterTest extends TestCase
             'dirname' => 'my',
             'path' => 'my/path',
             'timestamp' => 123,
-            'mimetype' => '',
+            'mimetype' => 'application/octet-stream',
             'size' => 456,
         ];
         $this->assertEquals($expect, $data);
@@ -115,7 +115,7 @@ class ElementsAdapterTest extends TestCase
         $this->assertCount(2, $container);
         $request = $container[1]['request'];
         $this->assertEquals('GET', $request->getMethod());
-        $this->assertEquals('api/2/media/files/321/download', $request->getUri()->getPath());
+        $this->assertEquals('api/media/download/321', $request->getUri()->getPath());
     }
 
     public function testReadFile()
@@ -135,7 +135,7 @@ class ElementsAdapterTest extends TestCase
             'dirname' => 'my',
             'path' => 'my/path',
             'timestamp' =>  123,
-            'mimetype' => '',
+            'mimetype' => 'application/octet-stream',
             'size' => 456,
             'contents' => 'hello world'
         ]);
@@ -157,7 +157,7 @@ class ElementsAdapterTest extends TestCase
             'dirname' => 'my',
             'path' => 'my/path',
             'timestamp' =>  123,
-            'mimetype' => '',
+            'mimetype' => 'application/octet-stream',
             'size' => 456,
             'contents' => ''
         ]);
@@ -239,7 +239,7 @@ class ElementsAdapterTest extends TestCase
             'dirname' => 'my',
             'path' => 'my/path',
             'timestamp' => 123,
-            'mimetype' => '',
+            'mimetype' => 'application/octet-stream',
             'size' => 456,
         ];
         $this->assertEquals($expect, $contents[0]);
@@ -269,7 +269,7 @@ class ElementsAdapterTest extends TestCase
                 'dirname' => 'my',
                 'path' => 'my/path',
                 'timestamp' =>  123,
-                'mimetype' => '',
+                'mimetype' => 'application/octet-stream',
                 'size' => 456,
             ]);
         }
