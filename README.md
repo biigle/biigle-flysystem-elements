@@ -1,5 +1,7 @@
 # Flysystem ELEMENTS
 
+[![Tests](https://github.com/biigle/flysystem-elements/actions/workflows/php.yml/badge.svg)](https://github.com/biigle/flysystem-elements/actions/workflows/php.yml)
+
 Flysystem adapter for the ELEMENTS media asset management system (read-only).
 
 ## Installation
