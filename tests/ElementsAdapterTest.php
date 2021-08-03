@@ -243,6 +243,10 @@ class ElementsAdapterTest extends TestCase
             'size' => 456,
         ];
         $this->assertEquals($expect, $contents[0]);
+
+        // Use cached directory contents.
+        $contents = $adapter->listContents('my');
+        $this->assertCount(1, $contents);
     }
 
     public function testMetadataMethods()

@@ -33,6 +33,13 @@ class ElementsAdapter extends AbstractAdapter
     protected $cache;
 
     /**
+     * Directory content cache.
+     *
+     * @var array
+     */
+    protected $contentCache;
+
+    /**
      * Constructor
      *
      * @param Client $client
@@ -43,6 +50,7 @@ class ElementsAdapter extends AbstractAdapter
         $this->setPathPrefix($prefix);
         $this->client = $client;
         $this->cache = [];
+        $this->contentCache = [];
     }
 
     /**
@@ -233,16 +241,24 @@ class ElementsAdapter extends AbstractAdapter
      */
     protected function getMediaFiles($path)
     {
-        $parent = $this->getMediaFile($path);
+        if (array_key_exists($path, $this->contentCache)) {
+            $content = array_map(function ($filePath) {
+                return $this->cache[$filePath];
+            }, $this->contentCache[$path]);
+        } else {
+            $parent = $this->getMediaFile($path);
 
-        $response = $this->client->get('api/2/media/files', ['query' => [
-            'parent' => $parent['id'],
-        ]]);
+            $response = $this->client->get('api/2/media/files', ['query' => [
+                'parent' => $parent['id'],
+            ]]);
 
-        $content = json_decode($response->getBody()->getContents(), true);
+            $content = json_decode($response->getBody()->getContents(), true);
+            $this->contentCache[$path] = [];
 
-        foreach ($content as $file) {
-            $this->cache[$file['path']] = $file;
+            foreach ($content as $file) {
+                $this->contentCache[$path][] = $file['path'];
+                $this->cache[$file['path']] = $file;
+            }
         }
 
         return $content;
