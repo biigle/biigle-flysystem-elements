@@ -273,7 +273,7 @@ class ElementsAdapter extends AbstractAdapter
      */
     protected function getMediaFileDownload($path)
     {
-        $id = $this->getMediaFile($path)['id'];
+        $id = $this->getMediaFile($path)['bundle'];
         $response = $this->client->get("api/media/download/{$id}");
 
         return $response;
