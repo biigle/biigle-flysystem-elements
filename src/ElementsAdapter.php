@@ -11,9 +11,6 @@ use League\Flysystem\Adapter\Polyfill\StreamedCopyTrait;
 use League\Flysystem\Config;
 use League\Flysystem\Util;
 use Mzur\GuessMIME\GuessMIME;
-use OpenStack\Common\Error\BadResponseError;
-use OpenStack\ObjectStore\v1\Models\Container;
-use OpenStack\ObjectStore\v1\Models\StorageObject;
 
 class ElementsAdapter extends AbstractAdapter
 {
