@@ -112,7 +112,7 @@ class ElementsAdapterTest extends TestCase
         $this->assertCount(2, $container);
         $request = $container[1]['request'];
         $this->assertEquals('GET', $request->getMethod());
-        $this->assertEquals('api/media/download/321', $request->getUri()->getPath());
+        $this->assertEquals('api/2/media/files/321/download', $request->getUri()->getPath());
     }
 
     public function testReadFile()
