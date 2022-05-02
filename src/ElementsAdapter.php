@@ -269,11 +269,15 @@ class ElementsAdapter implements FilesystemAdapter
                 return $this->cache[$filePath];
             }, $this->contentCache[$path]);
         } else {
-            $parent = $this->getMediaFile($path);
+            if ($path !== '') {
+                $parent = $this->getMediaFile($path);
 
-            $response = $this->client->get('api/2/media/files', ['query' => [
-                'parent' => $parent['id'],
-            ]]);
+                $response = $this->client->get('api/2/media/files', ['query' => [
+                    'parent' => $parent['id'],
+                ]]);
+            } else {
+                $response = $this->client->get('api/2/media/files');
+            }
 
             $content = json_decode($response->getBody()->getContents(), true);
             $this->contentCache[$path] = [];
