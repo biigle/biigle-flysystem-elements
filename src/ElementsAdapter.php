@@ -2,24 +2,26 @@
 
 namespace Biigle\Flysystem\Elements;
 
+use Exception;
 use GuzzleHttp\Client;
-use GuzzleHttp\Psr7\Stream;
-use GuzzleHttp\Psr7\StreamWrapper;
-use League\Flysystem\Adapter\AbstractAdapter;
-use League\Flysystem\Adapter\Polyfill\NotSupportingVisibilityTrait;
-use League\Flysystem\Adapter\Polyfill\StreamedCopyTrait;
 use League\Flysystem\Config;
-use League\Flysystem\Util;
-use Mzur\GuessMIME\GuessMIME;
-use OpenStack\Common\Error\BadResponseError;
-use OpenStack\ObjectStore\v1\Models\Container;
-use OpenStack\ObjectStore\v1\Models\StorageObject;
+use League\Flysystem\DirectoryAttributes;
+use League\Flysystem\FileAttributes;
+use League\Flysystem\FilesystemAdapter;
+use League\Flysystem\FilesystemException;
+use League\Flysystem\PathPrefixer;
+use League\Flysystem\UnableToCheckDirectoryExistence;
+use League\Flysystem\UnableToCheckFileExistence;
+use League\Flysystem\UnableToCreateDirectory;
+use League\Flysystem\UnableToDeleteDirectory;
+use League\Flysystem\UnableToDeleteFile;
+use League\Flysystem\UnableToReadFile;
+use League\Flysystem\UnableToRetrieveMetadata;
+use League\Flysystem\UnableToWriteFile;
+use League\MimeTypeDetection\ExtensionMimeTypeDetector;
 
-class ElementsAdapter extends AbstractAdapter
+class ElementsAdapter implements FilesystemAdapter
 {
-    use StreamedCopyTrait;
-    use NotSupportingVisibilityTrait;
-
     /**
      * @var Client
      */
@@ -39,174 +41,193 @@ class ElementsAdapter extends AbstractAdapter
      */
     protected $contentCache;
 
+    protected PathPrefixer $prefixer;
+
     /**
      * Constructor
      *
      * @param Client $client
      * @param string    $prefix
      */
-    public function __construct(Client $client, $prefix = null)
+    public function __construct(Client $client, $prefix = '')
     {
-        $this->setPathPrefix($prefix);
         $this->client = $client;
         $this->cache = [];
         $this->contentCache = [];
+        $this->prefixer = new PathPrefixer($prefix);
     }
 
     /**
      * {@inheritdoc}
      */
-    public function write($path, $contents, Config $config, $size = 0)
+    public function fileExists(string $path): bool
     {
-        //
-    }
+        $prefixPath = $this->prefixer->prefixPath($path);
 
-    /**
-     * {@inheritdoc}
-     */
-    public function writeStream($path, $resource, Config $config)
-    {
-        //
-    }
-
-    /**
-     * {@inheritdoc}
-     */
-    public function update($path, $contents, Config $config)
-    {
-        //
-    }
-
-    /**
-     * {@inheritdoc}
-     */
-    public function updateStream($path, $resource, Config $config)
-    {
-        //
-    }
-
-    /**
-     * {@inheritdoc}
-     */
-    public function rename($path, $newpath)
-    {
-        //
-    }
-
-    /**
-     * {@inheritdoc}
-     */
-    public function delete($path)
-    {
-        //
-    }
-
-    /**
-     * {@inheritdoc}
-     */
-    public function deleteDir($dirname)
-    {
-        //
-    }
-
-    /**
-     * {@inheritdoc}
-     */
-    public function createDir($dirname, Config $config)
-    {
-        //
-    }
-
-    /**
-     * {@inheritdoc}
-     */
-    public function has($path)
-    {
-        $file = $this->getMediaFile($path);
-
-        return !is_null($file);
-    }
-
-    /**
-     * {@inheritdoc}
-     */
-    public function read($path)
-    {
-        $data = $this->getMetadata($path);
-
-        if ($data['type'] === 'file') {
-            $response = $this->getMediaFileDownload($path);
-
-            $data['contents'] = $response->getBody()->getContents();
-        } else {
-            $data['contents'] = null;
+        try {
+            $file = $this->getMediaFile($prefixPath);
+        } catch (Exception $e) {
+            throw UnableToCheckFileExistence::forLocation($path, $e);
         }
 
-        return $data;
+        return !is_null($file) && $file['is_dir'] === false;
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function directoryExists(string $path): bool
+    {
+        $prefixPath = $this->prefixer->prefixPath($path);
+
+        try {
+            $file = $this->getMediaFile($prefixPath);
+        } catch (Exception $e) {
+            throw UnableToCheckDirectoryExistence::forLocation($path, $e);
+        }
+
+        return !is_null($file) && $file['is_dir'] === true;
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function write(string $path, string $contents, Config $config): void
+    {
+        throw UnableToWriteFile::atLocation($path, 'Not supported.');
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function writeStream(string $path, $contents, Config $config): void
+    {
+        throw UnableToWriteFile::atLocation($path, 'Not supported.');
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function read(string $path): string
+    {
+        $prefixPath = $this->prefixer->prefixPath($path);
+
+        try {
+            $response = $this->getMediaFileDownload($prefixPath);
+        } catch (Exception $e) {
+            throw UnableToReadFile::fromLocation($path, $e->getMessage(), $e);
+        }
+
+        return $response->getBody()->getContents();
     }
 
     /**
     * {@inheritdoc}
     */
-    public function readStream($path)
+    public function readStream(string $path)
     {
-        $data = $this->getMetadata($path);
+        $prefixPath = $this->prefixer->prefixPath($path);
 
-        if ($data['type'] === 'file') {
-            $response = $this->getMediaFileDownload($path);
-
-            $data['stream'] = StreamWrapper::getResource($response->getBody());
-        } else {
-            $data['stream'] = null;
+        try {
+            $response = $this->getMediaFileDownload($prefixPath);
+        } catch (Exception $e) {
+            throw UnableToReadFile::fromLocation($path, $e->getMessage(), $e);
         }
 
-        return $data;
+        return $response->getBody()->detach();
     }
 
     /**
      * {@inheritdoc}
      */
-    public function listContents($directory = '', $recursive = false)
+    public function delete(string $path): void
     {
-        $files = $this->getMediaFiles($directory);
-
-        return array_map(function ($file) {
-            return $this->parseFileMetadata($file);
-        }, $files);
+        throw UnableToDeleteFile::atLocation($path, 'Not supported.');
     }
 
     /**
      * {@inheritdoc}
      */
-    public function getMetadata($path)
+    public function deleteDirectory(string $path): void
     {
-        $file = $this->getMediaFile($path);
-
-        return $this->parseFileMetadata($file);
+        throw UnableToDeleteDirectory::atLocation($path, 'Not supported.');
     }
 
     /**
      * {@inheritdoc}
      */
-    public function getSize($path)
+    public function createDirectory(string $path, Config $config): void
     {
-        return $this->getMetadata($path);
+        throw UnableToCreateDirectory::atLocation($path, 'Not supported.');
     }
 
     /**
      * {@inheritdoc}
      */
-    public function getMimetype($path)
+    public function setVisibility(string $path, string $visibility): void
     {
-        return $this->getMetadata($path);
+        throw new FilesystemException('Not supported.');
     }
 
     /**
      * {@inheritdoc}
      */
-    public function getTimestamp($path)
+    public function visibility(string $path): FileAttributes
     {
-        return $this->getMetadata($path);
+        return $this->getFileMetadata($path, 'visibility');
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function mimeType(string $path): FileAttributes
+    {
+        return $this->getFileMetadata($path, 'mimeType');
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function lastModified(string $path): FileAttributes
+    {
+        return $this->getFileMetadata($path, 'lastModified');
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function fileSize(string $path): FileAttributes
+    {
+        return $this->getFileMetadata($path, 'fileSize');
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function listContents(string $path, bool $deep): iterable
+    {
+        $prefixPath = $this->prefixer->prefixPath($path);
+        $files = $this->getMediaFiles($prefixPath);
+
+        foreach ($files as $file) {
+            yield $this->parseStorageAttributes($file);
+        }
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function move(string $source, string $destination, Config $config): void
+    {
+        throw UnableToMoveFile::fromLocationTo($source, $destination);
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function copy(string $source, string $destination, Config $config): void
+    {
+        throw UnableToCopyFile::fromLocationTo($source, $destination);
     }
 
     /**
@@ -219,8 +240,10 @@ class ElementsAdapter extends AbstractAdapter
     protected function getMediaFile($path)
     {
         if (!array_key_exists($path, $this->cache)) {
+            $prefixPath = $this->prefixer->prefixPath($path);
+
             $response = $this->client->get('api/2/media/files', ['query' => [
-                'path' => $this->applyPathPrefix($path),
+                'path' => $prefixPath,
                 'limit' => 1,
             ]]);
 
@@ -273,30 +296,59 @@ class ElementsAdapter extends AbstractAdapter
      */
     protected function getMediaFileDownload($path)
     {
-        $id = $this->getMediaFile($path)['id'];
+        $file = $this->getMediaFile($path);
+        if ($file['is_dir']) {
+            throw new Exception("Not a file.");
+        }
+
+        $id = $file['id'];
         $response = $this->client->get("api/media/download/{$id}");
 
         return $response;
     }
 
-    /**
-     * Parse the raw media file information to a metadata array.
-     *
-     * @param array $file
-     *
-     * @return array
-     */
-    protected function parseFileMetadata(array $file)
+    protected function getFileMetadata(string $path, string $type): FileAttributes
     {
-        $gm = new GuessMIME;
+        $data = $this->getMetadata($path, $type);
 
-        return [
-            'type' => $file['is_dir'] ? 'dir' : 'file',
-            'dirname' => Util::dirname($file['path']),
-            'path' => $file['path'],
-            'timestamp' => $file['mtime'],
-            'mimetype' => $gm->guess($file['path']),
-            'size' => $file['size'],
-        ];
+        if ($data instanceof FileAttributes) {
+            return $data;
+        }
+
+        throw UnableToRetrieveMetadata::$type($path, 'No file.');
+    }
+
+    protected function getMetadata(string $path, string $type): FileAttributes|DirectoryAttributes
+    {
+        $prefixPath = $this->prefixer->prefixPath($path);
+        $file = $this->getMediaFile($prefixPath);
+
+        try {
+            return $this->parseStorageAttributes($file);
+        } catch (Exception $e) {
+            throw UnableToRetrieveMetadata::$type($path, $e->getMessage(), $e);
+        }
+    }
+
+    protected function parseStorageAttributes(array $attributes): FileAttributes|DirectoryAttributes
+    {
+        if ($attributes['is_dir']) {
+            return new DirectoryAttributes(
+                $attributes['path'],
+                'public',
+                $attributes['mtime']
+            );
+        }
+
+        $detector = new ExtensionMimeTypeDetector();
+        $mimeType = $detector->detectMimeTypeFromPath($attributes['path']);
+
+        return new FileAttributes(
+            $attributes['path'],
+            (int) $attributes['size'],
+            'public',
+            $attributes['mtime'],
+            $mimeType
+        );
     }
 }

@@ -8,8 +8,8 @@ use GuzzleHttp\Middleware;
 use GuzzleHttp\Psr7\Request;
 use GuzzleHttp\Psr7\Response;
 use GuzzleHttp\Psr7\Stream;
-use League\Flysystem\Config;
-use OpenStack\Common\Error\BadResponseError;
+use League\Flysystem\UnableToReadFile;
+use League\Flysystem\UnableToRetrieveMetadata;
 use PHPUnit\Framework\TestCase;
 
 
@@ -27,8 +27,8 @@ class ElementsAdapterTest extends TestCase
         $client = new Client(['handler' => $handlerStack]);
         $adapter = new ElementsAdapter($client);
 
-        $adapter->getMetadata('my/path');
-        $adapter->getMetadata('my/path');
+        $adapter->lastModified('my/path');
+        $adapter->lastModified('my/path');
 
         // Use cache for same paths.
         $this->assertCount(1, $container);
@@ -48,17 +48,9 @@ class ElementsAdapterTest extends TestCase
         $client = new Client(['handler' => $handlerStack]);
         $adapter = new ElementsAdapter($client);
 
-        $data = $adapter->getMetadata('my/path.jpg');
-
-        $expect = [
-            'type' => 'file',
-            'dirname' => 'my',
-            'path' => 'my/path.jpg',
-            'timestamp' => 123,
-            'mimetype' => 'image/jpeg',
-            'size' => 456,
-        ];
-        $this->assertEquals($expect, $data);
+        $this->assertEquals(123, $adapter->lastModified('my/path.jpg')->lastModified());
+        $this->assertEquals(456, $adapter->fileSize('my/path.jpg')->fileSize());
+        $this->assertEquals('image/jpeg', $adapter->mimeType('my/path.jpg')->mimeType());
     }
 
     public function testGetMetadataDir()
@@ -70,20 +62,11 @@ class ElementsAdapterTest extends TestCase
         $client = new Client(['handler' => $handlerStack]);
         $adapter = new ElementsAdapter($client);
 
-        $data = $adapter->getMetadata('my/path');
-
-        $expect = [
-            'type' => 'dir',
-            'dirname' => 'my',
-            'path' => 'my/path',
-            'timestamp' => 123,
-            'mimetype' => 'application/octet-stream',
-            'size' => 456,
-        ];
-        $this->assertEquals($expect, $data);
+        $this->expectException(UnableToRetrieveMetadata::class);
+        $adapter->lastModified('my/path');
     }
 
-    public function testHas()
+    public function testFileExists()
     {
         $mock = new MockHandler([
             new Response(200, [], '[]'),
@@ -93,8 +76,22 @@ class ElementsAdapterTest extends TestCase
         $client = new Client(['handler' => $handlerStack]);
         $adapter = new ElementsAdapter($client);
 
-        $this->assertFalse($adapter->has('file-one'));
-        $this->assertTrue($adapter->has('file-two'));
+        $this->assertFalse($adapter->fileExists('file-one'));
+        $this->assertTrue($adapter->fileExists('file-two'));
+    }
+
+    public function testDirectoryExists()
+    {
+        $mock = new MockHandler([
+            new Response(200, [], '[]'),
+            new Response(200, [], '[{"is_dir":true,"mtime":123,"size": 456,"path":"my/path"}]'),
+        ]);
+        $handlerStack = HandlerStack::create($mock);
+        $client = new Client(['handler' => $handlerStack]);
+        $adapter = new ElementsAdapter($client);
+
+        $this->assertFalse($adapter->directoryExists('directory-one'));
+        $this->assertTrue($adapter->directoryExists('file-two'));
     }
 
     public function testReadRequest()
@@ -128,17 +125,7 @@ class ElementsAdapterTest extends TestCase
         $client = new Client(['handler' => $handlerStack]);
         $adapter = new ElementsAdapter($client);
 
-        $data = $adapter->read('my/path');
-
-        $this->assertEquals($data, [
-            'type' => 'file',
-            'dirname' => 'my',
-            'path' => 'my/path',
-            'timestamp' =>  123,
-            'mimetype' => 'application/octet-stream',
-            'size' => 456,
-            'contents' => 'hello world'
-        ]);
+        $this->assertEquals('hello world', $adapter->read('my/path'));
     }
 
     public function testReadDir()
@@ -150,17 +137,8 @@ class ElementsAdapterTest extends TestCase
         $client = new Client(['handler' => $handlerStack]);
         $adapter = new ElementsAdapter($client);
 
+        $this->expectException(UnableToReadFile::class);
         $data = $adapter->read('my/path');
-
-        $this->assertEquals($data, [
-            'type' => 'dir',
-            'dirname' => 'my',
-            'path' => 'my/path',
-            'timestamp' =>  123,
-            'mimetype' => 'application/octet-stream',
-            'size' => 456,
-            'contents' => ''
-        ]);
     }
 
     public function testReadStreamFile()
@@ -175,7 +153,7 @@ class ElementsAdapterTest extends TestCase
 
         $data = $adapter->readStream('my/path');
 
-        $this->assertEquals('hello world', stream_get_contents($data['stream']));
+        $this->assertEquals('hello world', stream_get_contents($data));
     }
 
     public function testReadStreamDir()
@@ -187,9 +165,8 @@ class ElementsAdapterTest extends TestCase
         $client = new Client(['handler' => $handlerStack]);
         $adapter = new ElementsAdapter($client);
 
+        $this->expectException(UnableToReadFile::class);
         $data = $adapter->readStream('my/path');
-
-        $this->assertEquals(null, $data['stream']);
     }
 
     public function testListContentsRequest()
@@ -205,7 +182,9 @@ class ElementsAdapterTest extends TestCase
         $client = new Client(['handler' => $handlerStack]);
         $adapter = new ElementsAdapter($client);
 
-        $adapter->listContents('my/path');
+        $contents = $adapter->listContents('my/path', false);
+        // Unroll the iterator, otherwise no requests would be sent.
+        iterator_to_array($contents);
 
         $this->assertCount(2, $container);
         $request = $container[0]['request'];
@@ -231,31 +210,29 @@ class ElementsAdapterTest extends TestCase
         $client = new Client(['handler' => $handlerStack]);
         $adapter = new ElementsAdapter($client);
 
-        $contents = $adapter->listContents('my');
+        $contents = $adapter->listContents('my', false);
+        $contents = iterator_to_array($contents);
         $this->assertCount(1, $contents);
 
-        $expect = [
-            'type' => 'file',
-            'dirname' => 'my',
-            'path' => 'my/path',
-            'timestamp' => 123,
-            'mimetype' => 'application/octet-stream',
-            'size' => 456,
-        ];
-        $this->assertEquals($expect, $contents[0]);
+        $attributes = $contents[0];
+        $this->assertEquals('my/path', $attributes->path());
+        $this->assertEquals(123, $attributes->lastModified());
+        $this->assertEquals(456, $attributes->fileSize());
+        $this->assertEquals(null, $attributes->mimeType());
 
         // Use cached directory contents.
-        $contents = $adapter->listContents('my');
+        $contents = $adapter->listContents('my', false);
+        $contents = iterator_to_array($contents);
         $this->assertCount(1, $contents);
     }
 
     public function testMetadataMethods()
     {
         $methods = [
-            'getMetadata',
-            'getSize',
-            'getMimetype',
-            'getTimestamp'
+            'visibility',
+            'fileSize',
+            'mimeType',
+            'lastModified'
         ];
 
         $mock = new MockHandler([
@@ -266,16 +243,12 @@ class ElementsAdapterTest extends TestCase
         $adapter = new ElementsAdapter($client);
 
         foreach ($methods as $method) {
-            $metadata = $adapter->$method('my/path');
+            $attributes = $adapter->$method('my/path');
 
-            $this->assertEquals($metadata, [
-                'type' => 'file',
-                'dirname' => 'my',
-                'path' => 'my/path',
-                'timestamp' =>  123,
-                'mimetype' => 'application/octet-stream',
-                'size' => 456,
-            ]);
+            $this->assertEquals('my/path', $attributes->path());
+            $this->assertEquals(123, $attributes->lastModified());
+            $this->assertEquals(456, $attributes->fileSize());
+            $this->assertEquals(null, $attributes->mimeType());
         }
     }
 }
