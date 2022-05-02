@@ -97,7 +97,7 @@ class ElementsAdapterTest extends TestCase
     public function testReadRequest()
     {
         $mock = new MockHandler([
-            new Response(200, [], '[{"id":321,"is_dir":false,"mtime":123,"size":456,"path":"my/path"}]'),
+            new Response(200, [], '[{"bundle":321,"is_dir":false,"mtime":123,"size":456,"path":"my/path"}]'),
             new Response(200, [], 'hello world'),
         ]);
         $container = [];
@@ -118,7 +118,7 @@ class ElementsAdapterTest extends TestCase
     public function testReadFile()
     {
         $mock = new MockHandler([
-            new Response(200, [], '[{"id":321,"is_dir":false,"mtime":123,"size":456,"path":"my/path"}]'),
+            new Response(200, [], '[{"bundle":321,"is_dir":false,"mtime":123,"size":456,"path":"my/path"}]'),
             new Response(200, [], 'hello world'),
         ]);
         $handlerStack = HandlerStack::create($mock);
@@ -144,7 +144,7 @@ class ElementsAdapterTest extends TestCase
     public function testReadStreamFile()
     {
         $mock = new MockHandler([
-            new Response(200, [], '[{"id":321,"is_dir":false,"mtime":123,"size":456,"path":"my/path"}]'),
+            new Response(200, [], '[{"bundle":321,"is_dir":false,"mtime":123,"size":456,"path":"my/path"}]'),
             new Response(200, [], 'hello world'),
         ]);
         $handlerStack = HandlerStack::create($mock);

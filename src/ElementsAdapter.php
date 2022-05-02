@@ -301,7 +301,7 @@ class ElementsAdapter implements FilesystemAdapter
             throw new Exception("Not a file.");
         }
 
-        $id = $file['id'];
+        $id = $file['bundle'];
         $response = $this->client->get("api/media/download/{$id}");
 
         return $response;
