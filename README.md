@@ -23,27 +23,21 @@ $client = new Client([
 ]);
 $adapter = new ElementsAdapter($client);
 
-$data = $adapter->getMetadata('.projects/path/to/file.jpg');
-var_dump($data);
-// [
-//     'type' => 'file',
-//     'dirname' => '.projects/path/to',
-//     'path' => '.projects/path/to/file.jpg',
-//     'timestamp' => 1627980183,
-//     'mimetype' => 'image/jpeg',
-//     'size' => 123456,
-// ];
+$exists = $adapter->fileExists('.projects/path/to/file.jpg');
+var_dump($exists);
+// bool(true);
 ```
 
-Available methods are:
+Supported methods are:
 
-- has
+- fileExists
+- directoryExists
 - read
 - readStream
+- visibility
+- mimeType
+- lastModified
+- fileSize
 - listContents
-- getMetadata
-- getSize
-- getMimetype
-- getTimestamp
 
-All other (non-reading) methods have no effect.
+All other (non-reading) methods throw an exception.
