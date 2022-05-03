@@ -226,6 +226,24 @@ class ElementsAdapterTest extends TestCase
         $this->assertCount(1, $contents);
     }
 
+    public function testListContentsRoot()
+    {
+        $mock = new MockHandler([
+            new Response(200, [], '[{"id":321,"path":"my/path"}]'),
+        ]);
+        $handlerStack = HandlerStack::create($mock);
+        $client = new Client(['handler' => $handlerStack]);
+        $adapter = new ElementsAdapter($client);
+
+        $contents = $adapter->listContents('', false);
+        $contents = iterator_to_array($contents);
+        $this->assertCount(1, $contents);
+
+        $attributes = $contents[0];
+        $this->assertEquals('my/path', $attributes->path());
+        $this->assertEquals(null, $attributes->lastModified());
+    }
+
     public function testMetadataMethods()
     {
         $methods = [
