@@ -272,14 +272,24 @@ class ElementsAdapter implements FilesystemAdapter
             if ($path !== '') {
                 $parent = $this->getMediaFile($path);
 
+                if (!$parent) {
+                    return [];
+                }
+
                 $response = $this->client->get('api/2/media/files', ['query' => [
                     'parent' => $parent['id'],
                 ]]);
+
+                $content = json_decode($response->getBody()->getContents(), true);
             } else {
-                $response = $this->client->get('api/2/media/files');
+                $response = $this->client->get('api/2/media/roots');
+                $content = json_decode($response->getBody()->getContents(), true);
+
+                if (!is_null($content)) {
+                    $content = $this->processFileRoots($content);
+                }
             }
 
-            $content = json_decode($response->getBody()->getContents(), true);
             $this->contentCache[$path] = [];
 
             foreach ($content as $file) {
@@ -340,7 +350,7 @@ class ElementsAdapter implements FilesystemAdapter
             return new DirectoryAttributes(
                 $attributes['path'],
                 'public',
-                $attributes['mtime']
+                $attributes['mtime'] ?? null
             );
         }
 
@@ -354,5 +364,15 @@ class ElementsAdapter implements FilesystemAdapter
             $attributes['mtime'],
             $mimeType
         );
+    }
+
+    protected function processFileRoots(array $roots): array
+    {
+        return array_map(function ($root) {
+            return [
+                'is_dir' => true,
+                'path' => $root['path'],
+            ];
+        }, $roots);
     }
 }
