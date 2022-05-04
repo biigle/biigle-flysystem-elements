@@ -330,6 +330,7 @@ class ElementsAdapter implements FilesystemAdapter
 
     protected function getMetadata(string $path, string $type): FileAttributes|DirectoryAttributes
     {
+        $file = $this->getMediaFile($path);
 
         try {
             return $this->parseStorageAttributes($file);
