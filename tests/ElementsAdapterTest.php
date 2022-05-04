@@ -229,7 +229,8 @@ class ElementsAdapterTest extends TestCase
     public function testListContentsRoot()
     {
         $mock = new MockHandler([
-            new Response(200, [], '[{"id":321,"path":"my/path"}]'),
+            new Response(200, [], '[{"id":1,"path":"/data/snfs1"}]'),
+            new Response(200, [], '[{"full_path":"/data/snfs1/my/path"}]'),
         ]);
         $handlerStack = HandlerStack::create($mock);
         $client = new Client(['handler' => $handlerStack]);
