@@ -35,6 +35,13 @@ class ElementsAdapter implements FilesystemAdapter
     protected $cache;
 
     /**
+     * Caches the Elements volume paths.
+     *
+     * @var array
+     */
+    protected $volumePathsCache;
+
+    /**
      * Directory content cache.
      *
      * @var array
@@ -54,6 +61,7 @@ class ElementsAdapter implements FilesystemAdapter
         $this->client = $client;
         $this->cache = [];
         $this->contentCache = [];
+        $this->volumePathsCache = [];
         $this->prefixer = new PathPrefixer($prefix);
     }
 
@@ -247,7 +255,7 @@ class ElementsAdapter implements FilesystemAdapter
                 'limit' => 1,
             ]]);
 
-            $content = json_decode($response->getBody()->getContents(), true);
+            $content = json_decode($response->getBody(), true);
 
             $this->cache[$path] = $content[0] ?? null;
         }
@@ -280,10 +288,14 @@ class ElementsAdapter implements FilesystemAdapter
                     'parent' => $parent['id'],
                 ]]);
 
-                $content = json_decode($response->getBody()->getContents(), true);
+                $content = json_decode($response->getBody(), true);
             } else {
-                $response = $this->client->get('api/2/media/roots');
-                $content = json_decode($response->getBody()->getContents(), true);
+                if (empty($this->volumePathsCache)) {
+                    $this->fetchVolumePaths();
+                }
+
+                $response = $this->client->get('api/2/media/root-permissions/mine/resolved');
+                $content = json_decode($response->getBody(), true);
 
                 if (!is_null($content)) {
                     $content = $this->processFileRoots($content);
@@ -366,12 +378,22 @@ class ElementsAdapter implements FilesystemAdapter
         );
     }
 
+    protected function fetchVolumePaths(): void
+    {
+        $response = $this->client->get('api/2/volumes');
+
+        $this->volumePathsCache = array_map(function ($volume) {
+            return $volume['path'];
+        }, json_decode($response->getBody(), true));
+    }
+
     protected function processFileRoots(array $roots): array
     {
         return array_map(function ($root) {
             return [
                 'is_dir' => true,
-                'path' => $root['path'],
+                // Remove the volume path prefix.
+                'path' => str_replace($this->volumePathsCache, '', $root['full_path']),
             ];
         }, $roots);
     }
