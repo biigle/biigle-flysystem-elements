@@ -9,7 +9,6 @@ use League\Flysystem\DirectoryAttributes;
 use League\Flysystem\FileAttributes;
 use League\Flysystem\FilesystemAdapter;
 use League\Flysystem\FilesystemException;
-use League\Flysystem\PathPrefixer;
 use League\Flysystem\UnableToCheckDirectoryExistence;
 use League\Flysystem\UnableToCheckFileExistence;
 use League\Flysystem\UnableToCreateDirectory;
@@ -48,21 +47,17 @@ class ElementsAdapter implements FilesystemAdapter
      */
     protected $contentCache;
 
-    protected PathPrefixer $prefixer;
-
     /**
      * Constructor
      *
      * @param Client $client
-     * @param string    $prefix
      */
-    public function __construct(Client $client, $prefix = '')
+    public function __construct(Client $client)
     {
         $this->client = $client;
         $this->cache = [];
         $this->contentCache = [];
         $this->volumePathsCache = [];
-        $this->prefixer = new PathPrefixer($prefix);
     }
 
     /**
@@ -70,10 +65,8 @@ class ElementsAdapter implements FilesystemAdapter
      */
     public function fileExists(string $path): bool
     {
-        $prefixPath = $this->prefixer->prefixPath($path);
-
         try {
-            $file = $this->getMediaFile($prefixPath);
+            $file = $this->getMediaFile($path);
         } catch (Exception $e) {
             throw UnableToCheckFileExistence::forLocation($path, $e);
         }
@@ -86,10 +79,8 @@ class ElementsAdapter implements FilesystemAdapter
      */
     public function directoryExists(string $path): bool
     {
-        $prefixPath = $this->prefixer->prefixPath($path);
-
         try {
-            $file = $this->getMediaFile($prefixPath);
+            $file = $this->getMediaFile($path);
         } catch (Exception $e) {
             throw UnableToCheckDirectoryExistence::forLocation($path, $e);
         }
@@ -118,10 +109,8 @@ class ElementsAdapter implements FilesystemAdapter
      */
     public function read(string $path): string
     {
-        $prefixPath = $this->prefixer->prefixPath($path);
-
         try {
-            $response = $this->getMediaFileDownload($prefixPath);
+            $response = $this->getMediaFileDownload($path);
         } catch (Exception $e) {
             throw UnableToReadFile::fromLocation($path, $e->getMessage(), $e);
         }
@@ -134,10 +123,8 @@ class ElementsAdapter implements FilesystemAdapter
     */
     public function readStream(string $path)
     {
-        $prefixPath = $this->prefixer->prefixPath($path);
-
         try {
-            $response = $this->getMediaFileDownload($prefixPath);
+            $response = $this->getMediaFileDownload($path);
         } catch (Exception $e) {
             throw UnableToReadFile::fromLocation($path, $e->getMessage(), $e);
         }
@@ -214,8 +201,7 @@ class ElementsAdapter implements FilesystemAdapter
      */
     public function listContents(string $path, bool $deep): iterable
     {
-        $prefixPath = $this->prefixer->prefixPath($path);
-        $files = $this->getMediaFiles($prefixPath);
+        $files = $this->getMediaFiles($path);
 
         foreach ($files as $file) {
             yield $this->parseStorageAttributes($file);
@@ -248,10 +234,8 @@ class ElementsAdapter implements FilesystemAdapter
     protected function getMediaFile($path)
     {
         if (!array_key_exists($path, $this->cache)) {
-            $prefixPath = $this->prefixer->prefixPath($path);
-
             $response = $this->client->get('api/2/media/files', ['query' => [
-                'path' => $prefixPath,
+                'path' => $path,
                 'limit' => 1,
             ]]);
 
@@ -346,8 +330,6 @@ class ElementsAdapter implements FilesystemAdapter
 
     protected function getMetadata(string $path, string $type): FileAttributes|DirectoryAttributes
     {
-        $prefixPath = $this->prefixer->prefixPath($path);
-        $file = $this->getMediaFile($prefixPath);
 
         try {
             return $this->parseStorageAttributes($file);
