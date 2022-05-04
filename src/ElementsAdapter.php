@@ -9,7 +9,6 @@ use League\Flysystem\DirectoryAttributes;
 use League\Flysystem\FileAttributes;
 use League\Flysystem\FilesystemAdapter;
 use League\Flysystem\FilesystemException;
-use League\Flysystem\PathPrefixer;
 use League\Flysystem\UnableToCheckDirectoryExistence;
 use League\Flysystem\UnableToCheckFileExistence;
 use League\Flysystem\UnableToCreateDirectory;
@@ -35,26 +34,30 @@ class ElementsAdapter implements FilesystemAdapter
     protected $cache;
 
     /**
+     * Caches the Elements volume paths.
+     *
+     * @var array
+     */
+    protected $volumePathsCache;
+
+    /**
      * Directory content cache.
      *
      * @var array
      */
     protected $contentCache;
 
-    protected PathPrefixer $prefixer;
-
     /**
      * Constructor
      *
      * @param Client $client
-     * @param string    $prefix
      */
-    public function __construct(Client $client, $prefix = '')
+    public function __construct(Client $client)
     {
         $this->client = $client;
         $this->cache = [];
         $this->contentCache = [];
-        $this->prefixer = new PathPrefixer($prefix);
+        $this->volumePathsCache = [];
     }
 
     /**
@@ -62,10 +65,8 @@ class ElementsAdapter implements FilesystemAdapter
      */
     public function fileExists(string $path): bool
     {
-        $prefixPath = $this->prefixer->prefixPath($path);
-
         try {
-            $file = $this->getMediaFile($prefixPath);
+            $file = $this->getMediaFile($path);
         } catch (Exception $e) {
             throw UnableToCheckFileExistence::forLocation($path, $e);
         }
@@ -78,10 +79,8 @@ class ElementsAdapter implements FilesystemAdapter
      */
     public function directoryExists(string $path): bool
     {
-        $prefixPath = $this->prefixer->prefixPath($path);
-
         try {
-            $file = $this->getMediaFile($prefixPath);
+            $file = $this->getMediaFile($path);
         } catch (Exception $e) {
             throw UnableToCheckDirectoryExistence::forLocation($path, $e);
         }
@@ -110,10 +109,8 @@ class ElementsAdapter implements FilesystemAdapter
      */
     public function read(string $path): string
     {
-        $prefixPath = $this->prefixer->prefixPath($path);
-
         try {
-            $response = $this->getMediaFileDownload($prefixPath);
+            $response = $this->getMediaFileDownload($path);
         } catch (Exception $e) {
             throw UnableToReadFile::fromLocation($path, $e->getMessage(), $e);
         }
@@ -126,10 +123,8 @@ class ElementsAdapter implements FilesystemAdapter
     */
     public function readStream(string $path)
     {
-        $prefixPath = $this->prefixer->prefixPath($path);
-
         try {
-            $response = $this->getMediaFileDownload($prefixPath);
+            $response = $this->getMediaFileDownload($path);
         } catch (Exception $e) {
             throw UnableToReadFile::fromLocation($path, $e->getMessage(), $e);
         }
@@ -206,8 +201,7 @@ class ElementsAdapter implements FilesystemAdapter
      */
     public function listContents(string $path, bool $deep): iterable
     {
-        $prefixPath = $this->prefixer->prefixPath($path);
-        $files = $this->getMediaFiles($prefixPath);
+        $files = $this->getMediaFiles($path);
 
         foreach ($files as $file) {
             yield $this->parseStorageAttributes($file);
@@ -240,14 +234,12 @@ class ElementsAdapter implements FilesystemAdapter
     protected function getMediaFile($path)
     {
         if (!array_key_exists($path, $this->cache)) {
-            $prefixPath = $this->prefixer->prefixPath($path);
-
             $response = $this->client->get('api/2/media/files', ['query' => [
-                'path' => $prefixPath,
+                'path' => $path,
                 'limit' => 1,
             ]]);
 
-            $content = json_decode($response->getBody()->getContents(), true);
+            $content = json_decode($response->getBody(), true);
 
             $this->cache[$path] = $content[0] ?? null;
         }
@@ -272,14 +264,28 @@ class ElementsAdapter implements FilesystemAdapter
             if ($path !== '') {
                 $parent = $this->getMediaFile($path);
 
+                if (!$parent) {
+                    return [];
+                }
+
                 $response = $this->client->get('api/2/media/files', ['query' => [
                     'parent' => $parent['id'],
                 ]]);
+
+                $content = json_decode($response->getBody(), true);
             } else {
-                $response = $this->client->get('api/2/media/files');
+                if (empty($this->volumePathsCache)) {
+                    $this->fetchVolumePaths();
+                }
+
+                $response = $this->client->get('api/2/media/root-permissions/mine/resolved');
+                $content = json_decode($response->getBody(), true);
+
+                if (!is_null($content)) {
+                    $content = $this->processFileRoots($content);
+                }
             }
 
-            $content = json_decode($response->getBody()->getContents(), true);
             $this->contentCache[$path] = [];
 
             foreach ($content as $file) {
@@ -324,8 +330,7 @@ class ElementsAdapter implements FilesystemAdapter
 
     protected function getMetadata(string $path, string $type): FileAttributes|DirectoryAttributes
     {
-        $prefixPath = $this->prefixer->prefixPath($path);
-        $file = $this->getMediaFile($prefixPath);
+        $file = $this->getMediaFile($path);
 
         try {
             return $this->parseStorageAttributes($file);
@@ -340,7 +345,7 @@ class ElementsAdapter implements FilesystemAdapter
             return new DirectoryAttributes(
                 $attributes['path'],
                 'public',
-                $attributes['mtime']
+                $attributes['mtime'] ?? null
             );
         }
 
@@ -354,5 +359,25 @@ class ElementsAdapter implements FilesystemAdapter
             $attributes['mtime'],
             $mimeType
         );
+    }
+
+    protected function fetchVolumePaths(): void
+    {
+        $response = $this->client->get('api/2/volumes');
+
+        $this->volumePathsCache = array_map(function ($volume) {
+            return $volume['path'];
+        }, json_decode($response->getBody(), true));
+    }
+
+    protected function processFileRoots(array $roots): array
+    {
+        return array_map(function ($root) {
+            return [
+                'is_dir' => true,
+                // Remove the volume path prefix.
+                'path' => str_replace($this->volumePathsCache, '', $root['full_path']),
+            ];
+        }, $roots);
     }
 }
