@@ -312,7 +312,9 @@ class ElementsAdapter implements FilesystemAdapter
         }
 
         $id = $file['id'];
-        $response = $this->client->get("api/2/media/files/{$id}/download");
+        $response = $this->client->get("api/2/media/files/{$id}/download", [
+            'stream' => true,
+        ]);
 
         return $response;
     }
